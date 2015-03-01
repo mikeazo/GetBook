@@ -19,6 +19,7 @@ import sys
 import tidy
 import codecs 
 import platform
+from pyquery import PyQuery
 
 #import pdb # For debugging
 
@@ -51,59 +52,45 @@ if not book_id:
 if create_book==False:
     create_epub=True
 
-book_url='http://maxwellinstitute.byu.edu/publications/books/?bookid='+book_id
+book_url='http://publications.maxwellinstitute.byu.edu/fullscreen/?pub='+book_id
 
 f=urlopener.open(book_url)
 #f=open('sample_book.html')
 s=f.read()
 
-#book_title=re.search('(?<=<META NAME="title" CONTENT=").+?(?=">)',s).group(0)
-book_header=re.search('(?<=<title>).+?(?=</title>)',s).group(0)
-book_title=re.search('^.+(?= by )',book_header).group(0)
-book_author=re.search('(?<='+book_title+' by ).+$',book_header)
-#book_author=re.search('(?<=<META NAME="author" CONTENT=").+?(?=">)',s)
-if book_author:
-    book_author=book_author.group(0)
-else:
-    book_author="Unknown"
+d = PyQuery(s)
 
-#book_author=re.search('(?<=<META NAME="author" CONTENT=").+?(?=">)',s).group(0)
-#book_id=re.search('(?<=<META NAME="bookid" CONTENT=")[0-9]+(?=">)',s).group(0)
+book_title = d('#print-title').text().replace('>', '').strip()
+print book_title
+book_author = d('#print-author').text().replace('by:', '').strip()
+if not book_author:
+    book_author="Unknown"
+print book_author
 
 print 'Retrieving _'+book_title+'_ by '+book_author
 
-chapters=re.findall('(?<=\?bookid='+book_id+'&chapid=)[0-9]+(?=">)',s)
-
+# find the  chapters
+chapters = d('#fullscreen-toc-content a')
 n_chapters=len(chapters)
-chapter_titles=['']*n_chapters
+chapter_titles=[c.text for c in chapters]
 chapter_texts=['']*n_chapters
 
 xhtml_options = dict(output_xhtml=1, add_xml_decl=1, indent=1, tidy_mark=0, char_encoding='utf8', clean=1, numeric_entities=1,enclose_block_text=1,doctype='strict',anchor_as_name=0)
 xml_options = dict(indent=1, tidy_mark=0, numeric_entities=1,input_xml=1)
-#tidy_options = dict(output_xhtml=1, add_xml_decl=1, indent=1, tidy_mark=0)
 
-def chapterlink(matchobj):
-    return 'chapter'+str(chapters.index(re.sub('http.+=','',matchobj.group(0))))+'.xhtml'
-
-for n in range(n_chapters):
-#for n in range(1):
-    print 'Retrieving chapter '+str(n+1)+' of '+str(n_chapters)
-    chapter_url=book_url+'&chapid='+chapters[n]
+for n in range(1, n_chapters+1):
+    print 'Retrieving chapter '+str(n)+' of '+str(n_chapters)
+    chapter_url=book_url+'&index='+str(n)
     f=urlopener.open(chapter_url)
-#    f=open('sample_chapter.html')
-    s_chapter=unicode(f.read(),'utf8','ignore')
-#    chapter_titles[n]=re.search('(?<=<META NAME="title" CONTENT=").+?(?=">)',s_chapter).group(0)
-    chapter_titles[n]=re.search('(?<=<title>'+book_title+' - ).+?(?=</title>)',s_chapter).group(0)
-    chapter_text=re.findall("<div id='content_readable'>[\s\S]*?(?=</div>)",s_chapter)[0]
-    chapter_text=re.sub('http.+?chapid=([0-9]+)',chapterlink,chapter_text)
-    chapter_text=re.sub('"_','"',chapter_text)
-    chapter_text=re.sub('#_','#',chapter_text)
-    chapter_texts[n]=re.sub('\n','\n\t\t',chapter_text)
+    s_chapter=f.read()
+    d_chapter = PyQuery(s_chapter)
+    chapter_text = d_chapter('#html-content').html() 
+    chapter_texts[n-1]=re.sub('\n','\n\t\t',chapter_text)
     f.close()
     try:
-        print '    '+chapter_titles[n]
+        print '    '+chapter_titles[n-1]
     except:
-        print '    '+chapter_titles[n].encode('ascii', 'replace')
+        print '    '+chapter_titles[n-1].encode('ascii', 'replace')
     
 book_path=re.sub('[^a-zA-Z0-9\-_.() ]',' ',book_title)+'.'+book_id
 book_path0=book_path+''
